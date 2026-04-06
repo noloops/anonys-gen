@@ -145,7 +145,7 @@ def _write_event_id_h(path: Path, guard_prefix: str, events: list[Declaration], 
     lines.append("namespace anonys")
     lines.append("{")
 
-    num_timeout_classes = max(max_timeouts, 4)
+    num_timeout_classes = max(max_timeouts, 1)
     for i in range(1, num_timeout_classes + 1):
         lines.append(f"{_I1}class Timeout{i} {{}};")
     lines.append("")
