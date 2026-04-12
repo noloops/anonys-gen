@@ -144,8 +144,18 @@ def _fsm_ns(fsm_idx: int) -> str:
 
 def _write_forward_decls(lines: list[str], decls: list[Declaration]) -> None:
     """Write forward declarations grouped by namespace, multi-line format."""
-    ns_groups: dict[str, list[Declaration]] = {}
+    # Deduplicate by (kind, qualified type) so that two terminals with the
+    # same type but different names only produce one forward declaration.
+    seen: set[tuple[str, str]] = set()
+    unique: list[Declaration] = []
     for d in decls:
+        key = (d.kind, d.cpp_qualified)
+        if key not in seen:
+            seen.add(key)
+            unique.append(d)
+
+    ns_groups: dict[str, list[Declaration]] = {}
+    for d in unique:
         ns = d.cpp_namespace
         ns_groups.setdefault(ns, []).append(d)
 
@@ -679,7 +689,8 @@ def _generate_state_section(fsm_idx: int, state_id: int, fsm_def: FsmDefinition,
     has_published = bool(state.published)
 
     is_halted = (not has_any_handler and not state.has_enter and not state.has_exit
-                 and not has_published)
+                 and not has_published and not state.referenced
+                 and not _state_needs_timer(state))
 
     if is_halted:
         lines.append(f"{_I2}if (create) {{")

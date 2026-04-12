@@ -43,7 +43,7 @@ class Declaration:
     @property
     def ptr_name(self) -> str:
         """Pointer member name in Terminals struct, e.g. 'pEmergency'."""
-        return "p" + self.cpp_type_name
+        return "p" + self.element_name[0].upper() + self.element_name[1:]
 
 
 @dataclass
