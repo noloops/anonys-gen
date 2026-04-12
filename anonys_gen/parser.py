@@ -215,6 +215,8 @@ def _parse_state_line(line: str) -> State:
     name = tokens[0]
     if not _is_valid_cpp_name(name):
         raise ValueError(f"Invalid state name '{name}'")
+    if not name[0].isupper():
+        raise ValueError(f"State name '{name}' must start with an upper case letter")
     tokens = tokens[1:]
 
     # Parse flags: consume tokens that are made of +, -, and digits only
@@ -225,12 +227,12 @@ def _parse_state_line(line: str) -> State:
 
     while tokens:
         t = tokens[0]
-        # A flag token is composed entirely of +, -, and digits
+        # A flag token is composed entirely of +, -, and digits and starts with + or -
         if all(ch in "+-0123456789" for ch in t) and t[0] in "+-":
             flag_chars.extend(t)
             tokens = tokens[1:]
-        # Also handle a standalone digit right after flag tokens
-        elif t.isdigit() and flag_chars and not any(ch.isdigit() for ch in flag_chars):
+        # A standalone digit (timeout count) — either first or after +/- flags
+        elif t.isdigit() and not any(ch.isdigit() for ch in flag_chars):
             flag_chars.extend(t)
             tokens = tokens[1:]
         else:
@@ -268,6 +270,8 @@ def _parse_state_line(line: str) -> State:
         ev_name, is_mutable = _parse_event_token(tok)
         if not _is_valid_cpp_name(ev_name):
             raise ValueError(f"Invalid event name '{ev_name}' in state '{name}'")
+        if not ev_name[0].islower():
+            raise ValueError(f"Event name '{ev_name}' in state '{name}' must start with a lower case letter")
         events.append(ev_name)
         if is_mutable:
             mutable_events.add(ev_name)
@@ -276,12 +280,16 @@ def _parse_state_line(line: str) -> State:
     for tok in raw_referenced:
         if not _is_valid_cpp_name(tok):
             raise ValueError(f"Invalid referenced terminal name '{tok}' in state '{name}'")
+        if not tok[0].islower():
+            raise ValueError(f"Referenced terminal name '{tok}' in state '{name}' must start with a lower case letter")
         referenced.append(tok)
 
     published: list[str] = []
     for tok in raw_published:
         if not _is_valid_cpp_name(tok):
             raise ValueError(f"Invalid published terminal name '{tok}' in state '{name}'")
+        if not tok[0].islower():
+            raise ValueError(f"Published terminal name '{tok}' in state '{name}' must start with a lower case letter")
         published.append(tok)
 
     return State(
@@ -331,6 +339,11 @@ def parse_definition(filepath: Path) -> FsmDefinition:
             if not _is_valid_cpp_name(element_name):
                 raise ValueError(
                     f"{filepath.name}:{line_num}: invalid element name '{element_name}'"
+                )
+            if not element_name[0].islower():
+                raise ValueError(
+                    f"{filepath.name}:{line_num}: element name '{element_name}' "
+                    f"must start with a lower case letter"
                 )
             declarations.append(Declaration(kind, namespace_path, element_name))
         else:
