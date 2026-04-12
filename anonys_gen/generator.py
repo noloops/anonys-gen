@@ -60,7 +60,7 @@ def generate(config: GeneratorConfig) -> None:
 
     _write_event_id_h(anonys_dir / "EventId.h", guard, all_events, max_timeouts)
     _write_fsm_id_h(anonys_dir / "FsmId.h", guard, fsm_defs)
-    _write_generated_config_h(anonys_dir / "GeneratedConfig.h", guard)
+    _write_generated_config_h(anonys_dir / "GeneratedConfig.h", guard, len(fsm_defs))
     _write_fsm_pool_h(anonys_dir / "FsmPool.h", guard, fsm_defs)
     _write_fsm_pool_cpp(anonys_dir / "FsmPool.cpp", fsm_defs)
 
@@ -185,8 +185,8 @@ def _write_fsm_id_h(path: Path, guard_prefix: str, fsm_defs: list[FsmDefinition]
     lines.append("{")
     lines.append(f"{_I1}enum class FsmId : uint16_t {{")
     for i, fsm_def in enumerate(fsm_defs):
-        lines.append(f"{_I2}{fsm_def.name} = {i},")
-    lines.append(f"{_I2}Count_ = {len(fsm_defs)}")
+        comma = "," if i < len(fsm_defs) - 1 else ""
+        lines.append(f"{_I2}{fsm_def.name} = {i}{comma}")
     lines.append(f"{_I1}}};")
     lines.append("}")
     lines.append("")
@@ -200,7 +200,7 @@ def _write_fsm_id_h(path: Path, guard_prefix: str, fsm_defs: list[FsmDefinition]
 # GeneratedConfig.h
 # ---------------------------------------------------------------------------
 
-def _write_generated_config_h(path: Path, guard_prefix: str) -> None:
+def _write_generated_config_h(path: Path, guard_prefix: str, fsm_count: int) -> None:
     guard = f"{guard_prefix}_ANONYS_GENERATEDCONFIG_H"
     lines: list[str] = []
     lines.append("// ANONYS - Generated file, do not edit!")
@@ -211,6 +211,8 @@ def _write_generated_config_h(path: Path, guard_prefix: str) -> None:
     lines.append("")
     lines.append("namespace anonys")
     lines.append("{")
+    lines.append(f"{_I1}constexpr uint16_t FsmCount{{ {fsm_count} }};")
+    lines.append("")
     lines.append(f"{_I1}constexpr int32_t MaxNestedStates{{ 8 }};")
     lines.append("}")
     lines.append("")
@@ -357,7 +359,7 @@ def _write_fsm_pool_h(path: Path, guard_prefix: str, fsm_defs: list[FsmDefinitio
     lines.append("{")
     lines.append(f"{_I1}class FsmPool {{")
     lines.append(f"{_I1}public:")
-    lines.append(f"{_I2}static constexpr uint16_t Count{{ static_cast<uint16_t>(FsmId::Count_)}};")
+    lines.append(f"{_I2}static constexpr uint16_t Count{{ FsmCount }};")
 
     for i, fsm_def in enumerate(fsm_defs):
         lines.append(f"{_I2}using Terminals{fsm_def.name} = {_fsm_ns(i)}::Terminals;")
@@ -431,28 +433,28 @@ def _write_fsm_pool_cpp(path: Path, fsm_defs: list[FsmDefinition]) -> None:
     lines.append("")
 
     lines.append(f"{_I1}void FsmPool::handleEvent(FsmId fsmId, Event& event) {{")
-    lines.append(f"{_I2}if (fsmId < FsmId::Count_) {{")
+    lines.append(f"{_I2}if (static_cast<uint16_t>(fsmId) < FsmCount) {{")
     lines.append(f"{_I3}m_fsm[static_cast<uint16_t>(fsmId)].handleEvent(event);")
     lines.append(f"{_I2}}}")
     lines.append(f"{_I1}}}")
     lines.append("")
 
     lines.append(f"{_I1}void FsmPool::handleTimeoutEvent(FsmId fsmId, int16_t depth, EventId eventId) {{")
-    lines.append(f"{_I2}if (fsmId < FsmId::Count_) {{")
+    lines.append(f"{_I2}if (static_cast<uint16_t>(fsmId) < FsmCount) {{")
     lines.append(f"{_I3}m_fsm[static_cast<uint16_t>(fsmId)].handleTimeoutEvent(depth, eventId);")
     lines.append(f"{_I2}}}")
     lines.append(f"{_I1}}}")
     lines.append("")
 
     lines.append(f"{_I1}void FsmPool::setTracingService(TracingService* pTracingService) {{")
-    lines.append(f"{_I2}for (uint16_t fsmId{{0}}; fsmId < static_cast<uint16_t>(FsmId::Count_); ++fsmId) {{")
+    lines.append(f"{_I2}for (uint16_t fsmId{{0}}; fsmId < FsmCount; ++fsmId) {{")
     lines.append(f"{_I3}m_fsm[fsmId].setTracingService(pTracingService);")
     lines.append(f"{_I2}}}")
     lines.append(f"{_I1}}}")
     lines.append("")
 
     lines.append(f"{_I1}void FsmPool::setTracingService(FsmId fsmId, TracingService* pTracingService) {{")
-    lines.append(f"{_I2}if (fsmId < FsmId::Count_) {{")
+    lines.append(f"{_I2}if (static_cast<uint16_t>(fsmId) < FsmCount) {{")
     lines.append(f"{_I3}m_fsm[static_cast<uint16_t>(fsmId)].setTracingService(pTracingService);")
     lines.append(f"{_I2}}}")
     lines.append(f"{_I1}}}")
