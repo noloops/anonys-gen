@@ -7,6 +7,3 @@ name = "anonys-gen"
 version = "0.1.0"
 description = "Code generator for the Anonys C++ FSM framework"
 requires-python = ">=3.10"
-
-[project.scripts]
-anonys-gen = "anonys_gen.cli:main"
