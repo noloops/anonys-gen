@@ -24,19 +24,23 @@ def main() -> None:
     parser.add_argument("--config", type=Path, help="JSON config file")
     args = parser.parse_args()
 
-    if args.config:
-        data = json.loads(args.config.read_text(encoding="utf-8"))
-        config = GeneratorConfig(
-            fsm_definitions=[Path(p) for p in data["fsm_definitions"]],
-            anonys_output_dir=data["anonys_output_dir"],
-            fsm_output_dir=data["fsm_output_dir"],
-            project_name=data["project_name"],
-        )
-        generate(config)
-    else:
+    if not args.config:
         parser.print_help()
         sys.exit(1)
 
+    data = json.loads(args.config.read_text(encoding="utf-8"))
+    config = GeneratorConfig(
+        fsm_definitions=[Path(p) for p in data["fsm_definitions"]],
+        anonys_output_dir=data["anonys_output_dir"],
+        fsm_output_dir=data["fsm_output_dir"],
+        project_name=data["project_name"],
+    )
+    generate(config)
+
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (ValueError, TypeError) as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)

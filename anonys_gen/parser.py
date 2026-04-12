@@ -130,7 +130,7 @@ def _is_valid_cpp_name(name: str) -> bool:
         return False
     if name[0].isdigit():
         return False
-    return all(ch.isalnum() or ch == '_' for ch in name)
+    return all(ch.isascii() and (ch.isalnum() or ch == '_') for ch in name)
 
 
 def _parse_event_token(token: str) -> tuple[str, bool]:

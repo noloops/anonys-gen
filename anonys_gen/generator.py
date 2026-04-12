@@ -35,7 +35,7 @@ class GeneratorConfig:
 
 def generate(config: GeneratorConfig) -> None:
     """Run the complete code generation."""
-    from .parser import parse_definition
+    from .parser import parse_definition, _is_valid_cpp_name
 
     fsm_defs: list[FsmDefinition] = []
     for path in config.fsm_definitions:
@@ -47,6 +47,13 @@ def generate(config: GeneratorConfig) -> None:
         if fsm_def.name in seen_fsm:
             raise ValueError(f"Duplicate FSM name '{fsm_def.name}'")
         seen_fsm.add(fsm_def.name)
+
+    # Validate additional_fsm_ids
+    for name in (config.additional_fsm_ids or []):
+        if not _is_valid_cpp_name(name):
+            raise ValueError(f"Invalid additional FSM id '{name}'")
+        if not name[0].isupper():
+            raise ValueError(f"Additional FSM id '{name}' must start with an upper case letter")
 
     anonys_dir = config.anonys_output_dir / "anonys"
     fsm_header_dir = anonys_dir / "fsm"
