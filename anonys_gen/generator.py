@@ -29,6 +29,7 @@ class GeneratorConfig:
     anonys_output_dir: Path
     fsm_output_dir: Path
     include_guard_prefix: str
+    header: Path | None = None
 
 
 def generate(config: GeneratorConfig) -> None:
@@ -57,23 +58,49 @@ def generate(config: GeneratorConfig) -> None:
     all_events = _collect_unique_events(fsm_defs)
     max_timeouts = _max_timeouts(fsm_defs)
     guard = config.include_guard_prefix
+    header_text = config.header.read_text(encoding="utf-8") if config.header else ""
+    hdr = _file_header(header_text)
+    hdr_partial = _partial_header(header_text)
 
-    _write_event_id_h(anonys_dir / "EventId.h", guard, all_events, max_timeouts)
-    _write_fsm_id_h(anonys_dir / "FsmId.h", guard, fsm_defs)
-    _write_generated_config_h(anonys_dir / "GeneratedConfig.h", guard, len(fsm_defs))
-    _write_fsm_pool_h(anonys_dir / "FsmPool.h", guard, fsm_defs)
-    _write_fsm_pool_cpp(anonys_dir / "FsmPool.cpp", fsm_defs)
+    _write_event_id_h(anonys_dir / "EventId.h", guard, all_events, max_timeouts, hdr)
+    _write_fsm_id_h(anonys_dir / "FsmId.h", guard, fsm_defs, hdr)
+    _write_generated_config_h(anonys_dir / "GeneratedConfig.h", guard, len(fsm_defs), hdr)
+    _write_fsm_pool_h(anonys_dir / "FsmPool.h", guard, fsm_defs, hdr)
+    _write_fsm_pool_cpp(anonys_dir / "FsmPool.cpp", fsm_defs, hdr)
 
     for fsm_idx, fsm_def in enumerate(fsm_defs):
-        _write_terminals_h(impl_dir / f"terminals{fsm_def.name}.h", guard, fsm_idx, fsm_def)
-        _write_handlers_h(impl_dir / f"handlers{fsm_def.name}.h", guard, fsm_idx, fsm_def)
-        _write_fsm_struct_h(fsm_header_dir / f"{fsm_def.name}.h", guard, fsm_idx, fsm_def)
-        _generate_state_cpps(fsm_cpp_dir, fsm_idx, fsm_def)
+        _write_terminals_h(impl_dir / f"terminals{fsm_def.name}.h", guard, fsm_idx, fsm_def, hdr)
+        _write_handlers_h(impl_dir / f"handlers{fsm_def.name}.h", guard, fsm_idx, fsm_def, hdr)
+        _write_fsm_struct_h(fsm_header_dir / f"{fsm_def.name}.h", guard, fsm_idx, fsm_def, hdr)
+        _generate_state_cpps(fsm_cpp_dir, fsm_idx, fsm_def, hdr_partial)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+_GENERATED_TAG = "// ANONYS - Generated file, do not edit!"
+_GENERATED_MARKER = "// ANONYS - Generated code \u2013 do not edit the rest of this file!"
+
+
+def _file_header(header: str) -> list[str]:
+    """Build the file header lines from the configurable header + generated tag."""
+    lines: list[str] = []
+    if header:
+        for line in header.splitlines():
+            lines.append(line)
+    lines.append(_GENERATED_TAG)
+    return lines
+
+
+def _partial_header(header: str) -> list[str]:
+    """Build header lines for partially generated files (no generated-file tag)."""
+    lines: list[str] = []
+    if header:
+        for line in header.splitlines():
+            lines.append(line)
+    return lines
+
 
 def _collect_unique_events(fsm_defs: list[FsmDefinition]) -> list[Declaration]:
     seen: set[str] = set()
@@ -130,10 +157,10 @@ def _write_forward_decls(lines: list[str], decls: list[Declaration]) -> None:
 # EventId.h
 # ---------------------------------------------------------------------------
 
-def _write_event_id_h(path: Path, guard_prefix: str, events: list[Declaration], max_timeouts: int) -> None:
+def _write_event_id_h(path: Path, guard_prefix: str, events: list[Declaration], max_timeouts: int, hdr: list[str]) -> None:
     guard = f"{guard_prefix}_ANONYS_EVENTID_H"
     lines: list[str] = []
-    lines.append("// ANONYS - Generated file, do not edit!")
+    lines.extend(hdr)
     lines.append(f"#ifndef {guard}")
     lines.append(f"#define {guard}")
     lines.append("")
@@ -172,10 +199,10 @@ def _write_event_id_h(path: Path, guard_prefix: str, events: list[Declaration], 
 # FsmId.h
 # ---------------------------------------------------------------------------
 
-def _write_fsm_id_h(path: Path, guard_prefix: str, fsm_defs: list[FsmDefinition]) -> None:
+def _write_fsm_id_h(path: Path, guard_prefix: str, fsm_defs: list[FsmDefinition], hdr: list[str]) -> None:
     guard = f"{guard_prefix}_ANONYSFSMID_H"
     lines: list[str] = []
-    lines.append("// ANONYS - Generated file, do not edit!")
+    lines.extend(hdr)
     lines.append(f"#ifndef {guard}")
     lines.append(f"#define {guard}")
     lines.append("")
@@ -200,10 +227,10 @@ def _write_fsm_id_h(path: Path, guard_prefix: str, fsm_defs: list[FsmDefinition]
 # GeneratedConfig.h
 # ---------------------------------------------------------------------------
 
-def _write_generated_config_h(path: Path, guard_prefix: str, fsm_count: int) -> None:
+def _write_generated_config_h(path: Path, guard_prefix: str, fsm_count: int, hdr: list[str]) -> None:
     guard = f"{guard_prefix}_ANONYS_GENERATEDCONFIG_H"
     lines: list[str] = []
-    lines.append("// ANONYS - Generated file, do not edit!")
+    lines.extend(hdr)
     lines.append(f"#ifndef {guard}")
     lines.append(f"#define {guard}")
     lines.append("")
@@ -226,13 +253,13 @@ def _write_generated_config_h(path: Path, guard_prefix: str, fsm_count: int) -> 
 # terminals*.h
 # ---------------------------------------------------------------------------
 
-def _write_terminals_h(path: Path, guard_prefix: str, fsm_idx: int, fsm_def: FsmDefinition) -> None:
+def _write_terminals_h(path: Path, guard_prefix: str, fsm_idx: int, fsm_def: FsmDefinition, hdr: list[str]) -> None:
     guard = f"{guard_prefix}_ANONYS_TERMINALS_{fsm_def.name.upper()}_H"
     ns = _fsm_ns(fsm_idx)
     terminals = fsm_def.get_terminals()
 
     lines: list[str] = []
-    lines.append("// ANONYS - Generated file, do not edit!")
+    lines.extend(hdr)
     lines.append(f"#ifndef {guard}")
     lines.append(f"#define {guard}")
     lines.append("")
@@ -259,13 +286,13 @@ def _write_terminals_h(path: Path, guard_prefix: str, fsm_idx: int, fsm_def: Fsm
 # handlers*.h
 # ---------------------------------------------------------------------------
 
-def _write_handlers_h(path: Path, guard_prefix: str, fsm_idx: int, fsm_def: FsmDefinition) -> None:
+def _write_handlers_h(path: Path, guard_prefix: str, fsm_idx: int, fsm_def: FsmDefinition, hdr: list[str]) -> None:
     guard = f"{guard_prefix}_ANONYS_HANDLERS_{fsm_def.name.upper()}_H"
     flat = fsm_def.all_states_flat()
     id_map = _state_id_map(fsm_def)
 
     lines: list[str] = []
-    lines.append("// ANONYS - Generated file, do not edit!")
+    lines.extend(hdr)
     lines.append(f"#ifndef {guard}")
     lines.append(f"#define {guard}")
     lines.append("")
@@ -295,13 +322,13 @@ def _write_handlers_h(path: Path, guard_prefix: str, fsm_idx: int, fsm_def: FsmD
 # fsm/FsmName.h (StateDef struct)
 # ---------------------------------------------------------------------------
 
-def _write_fsm_struct_h(path: Path, guard_prefix: str, fsm_idx: int, fsm_def: FsmDefinition) -> None:
+def _write_fsm_struct_h(path: Path, guard_prefix: str, fsm_idx: int, fsm_def: FsmDefinition, hdr: list[str]) -> None:
     guard = f"{guard_prefix}_FSM_{fsm_def.name.upper()}_H"
     flat = fsm_def.all_states_flat()
     id_map = _state_id_map(fsm_def)
 
     lines: list[str] = []
-    lines.append("// ANONYS - Generated file, do not edit!")
+    lines.extend(hdr)
     lines.append(f"#ifndef {guard}")
     lines.append(f"#define {guard}")
     lines.append("")
@@ -339,10 +366,10 @@ def _write_fsm_struct_h(path: Path, guard_prefix: str, fsm_idx: int, fsm_def: Fs
 # FsmPool.h
 # ---------------------------------------------------------------------------
 
-def _write_fsm_pool_h(path: Path, guard_prefix: str, fsm_defs: list[FsmDefinition]) -> None:
+def _write_fsm_pool_h(path: Path, guard_prefix: str, fsm_defs: list[FsmDefinition], hdr: list[str]) -> None:
     guard = f"{guard_prefix}_FSM_H"
     lines: list[str] = []
-    lines.append("// ANONYS - Generated file, do not edit!")
+    lines.extend(hdr)
     lines.append(f"#ifndef {guard}")
     lines.append(f"#define {guard}")
     lines.append("")
@@ -413,9 +440,9 @@ def _get_initialize_params(fsm_def: FsmDefinition) -> str:
 # FsmPool.cpp
 # ---------------------------------------------------------------------------
 
-def _write_fsm_pool_cpp(path: Path, fsm_defs: list[FsmDefinition]) -> None:
+def _write_fsm_pool_cpp(path: Path, fsm_defs: list[FsmDefinition], hdr: list[str]) -> None:
     lines: list[str] = []
-    lines.append("// ANONYS - Generated file, do not edit!")
+    lines.extend(hdr)
     lines.append('#include "FsmPool.h"')
     lines.append('#include "anonys/Utils.h"')
     lines.append("")
@@ -503,7 +530,7 @@ def _find_initial_state(fsm_def: FsmDefinition) -> State:
 # Per-state .cpp file generation
 # ---------------------------------------------------------------------------
 
-def _generate_state_cpps(fsm_cpp_dir: Path, fsm_idx: int, fsm_def: FsmDefinition) -> None:
+def _generate_state_cpps(fsm_cpp_dir: Path, fsm_idx: int, fsm_def: FsmDefinition, hdr: list[str]) -> None:
     """Generate or update .cpp files for each state."""
     id_map = _state_id_map(fsm_def)
 
@@ -515,7 +542,7 @@ def _generate_state_cpps(fsm_cpp_dir: Path, fsm_idx: int, fsm_def: FsmDefinition
         if cpp_path.exists():
             _update_state_cpp(cpp_path, fsm_idx, state_id, fsm_def, state)
         else:
-            _create_state_cpp(cpp_path, fsm_idx, state_id, fsm_def, state)
+            _create_state_cpp(cpp_path, fsm_idx, state_id, fsm_def, state, hdr)
 
 
 def _get_state_cpp_path(fsm_cpp_dir: Path, fsm_def: FsmDefinition, state: State) -> Path:
@@ -535,9 +562,9 @@ def _get_state_cpp_path(fsm_cpp_dir: Path, fsm_def: FsmDefinition, state: State)
     return path
 
 
-def _create_state_cpp(path: Path, fsm_idx: int, state_id: int, fsm_def: FsmDefinition, state: State) -> None:
+def _create_state_cpp(path: Path, fsm_idx: int, state_id: int, fsm_def: FsmDefinition, state: State, hdr: list[str]) -> None:
     lines: list[str] = []
-
+    lines.extend(hdr)
     lines.append(f'#include "anonys/fsm/{fsm_def.name}.h"')
     lines.append("")
 
@@ -584,7 +611,7 @@ def _create_state_cpp(path: Path, fsm_idx: int, state_id: int, fsm_def: FsmDefin
     lines.append("}")
     lines.append("")
 
-    lines.append("// Generated code, do not edit:")
+    lines.append(_GENERATED_MARKER)
     lines.extend(_generate_state_section(fsm_idx, state_id, fsm_def, state))
 
     path.write_text("\n".join(lines), encoding="utf-8")
@@ -592,7 +619,7 @@ def _create_state_cpp(path: Path, fsm_idx: int, state_id: int, fsm_def: FsmDefin
 
 def _update_state_cpp(path: Path, fsm_idx: int, state_id: int, fsm_def: FsmDefinition, state: State) -> None:
     content = path.read_text(encoding="utf-8")
-    marker = "// Generated code, do not edit:"
+    marker = _GENERATED_MARKER
     idx = content.find(marker)
     if idx == -1:
         return
