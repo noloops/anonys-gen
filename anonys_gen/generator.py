@@ -30,6 +30,7 @@ class GeneratorConfig:
     fsm_output_dir: Path
     include_guard_prefix: str
     header: Path | None = None
+    additional_fsm_ids: list[str] | None = None
 
 
 def generate(config: GeneratorConfig) -> None:
@@ -63,7 +64,7 @@ def generate(config: GeneratorConfig) -> None:
     hdr_partial = _partial_header(header_text)
 
     _write_event_id_h(anonys_dir / "EventId.h", guard, all_events, max_timeouts, hdr)
-    _write_fsm_id_h(anonys_dir / "FsmId.h", guard, fsm_defs, hdr)
+    _write_fsm_id_h(anonys_dir / "FsmId.h", guard, fsm_defs, config.additional_fsm_ids or [], hdr)
     _write_generated_config_h(anonys_dir / "GeneratedConfig.h", guard, len(fsm_defs), hdr)
     _write_fsm_pool_h(anonys_dir / "FsmPool.h", guard, fsm_defs, hdr)
     _write_fsm_pool_cpp(anonys_dir / "FsmPool.cpp", fsm_defs, hdr)
@@ -199,7 +200,7 @@ def _write_event_id_h(path: Path, guard_prefix: str, events: list[Declaration], 
 # FsmId.h
 # ---------------------------------------------------------------------------
 
-def _write_fsm_id_h(path: Path, guard_prefix: str, fsm_defs: list[FsmDefinition], hdr: list[str]) -> None:
+def _write_fsm_id_h(path: Path, guard_prefix: str, fsm_defs: list[FsmDefinition], additional_ids: list[str], hdr: list[str]) -> None:
     guard = f"{guard_prefix}_ANONYSFSMID_H"
     lines: list[str] = []
     lines.extend(hdr)
@@ -211,9 +212,10 @@ def _write_fsm_id_h(path: Path, guard_prefix: str, fsm_defs: list[FsmDefinition]
     lines.append("namespace anonys")
     lines.append("{")
     lines.append(f"{_I1}enum class FsmId : uint16_t {{")
-    for i, fsm_def in enumerate(fsm_defs):
-        comma = "," if i < len(fsm_defs) - 1 else ""
-        lines.append(f"{_I2}{fsm_def.name} = {i}{comma}")
+    all_names = [fsm_def.name for fsm_def in fsm_defs] + additional_ids
+    for i, name in enumerate(all_names):
+        comma = "," if i < len(all_names) - 1 else ""
+        lines.append(f"{_I2}{name} = {i}{comma}")
     lines.append(f"{_I1}}};")
     lines.append("}")
     lines.append("")
