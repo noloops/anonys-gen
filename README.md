@@ -1,6 +1,6 @@
 # anonys_gen
 
-Code generator for the [Anonys](https://github.com/anonys) C++ finite state machine framework. It reads FSM definition files and generates all the C++ boilerplate needed by the Anonys runtime.
+Code generator for the Anonys C++ finite state machine framework. It reads FSM definition files and generates all the C++ boilerplate needed by the Anonys runtime.
 
 ## Installation
 
@@ -142,7 +142,7 @@ The three lists are separated by parentheses `(` `)`. The parentheses are always
 
 ### Complete example
 
-Below is the definition for a Jukebox FSM (from the main [Anonys](https://github.com/anonys) repository):
+Below is the definition for a Jukebox FSM (from the main Anonys repository):
 
 ```
 struct events.PowerOn powerOn
@@ -187,7 +187,7 @@ Error +-1 reset (std)
 
 ## Examples
 
-The main [Anonys](https://github.com/anonys) repository contains complete working examples with FSM definitions, generation scripts, and the generated C++ code:
+The main Anonys repository contains complete working examples with FSM definitions, generation scripts, and the generated C++ code:
 
 - **Example1** — single FSM (Jukebox)
 - **Example2** — multiple FSMs (Elevator, TrafficLight, Washer) with external dependencies and `additional_fsm_ids`
