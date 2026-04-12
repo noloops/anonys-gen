@@ -54,7 +54,8 @@ class State:
     has_enter: bool = False
     has_exit: bool = False
     num_timeouts: int = 0
-    events: list[str] = field(default_factory=list)        # element names of handled events
+    events: list[str] = field(default_factory=list)         # element names of handled events (clean, no &)
+    mutable_events: set[str] = field(default_factory=set)   # subset of events passed by mutable reference
     referenced: list[str] = field(default_factory=list)     # element names of referenced terminals (type-1)
     published: list[str] = field(default_factory=list)      # element names of published terminals (type-2)
     children: list[State] = field(default_factory=list)
@@ -119,6 +120,26 @@ class FsmDefinition:
         for s in self.all_states_flat():
             published_names.update(s.published)
         return [d for d in self.declarations if d.element_name in published_names]
+
+
+def _is_valid_cpp_name(name: str) -> bool:
+    """Check whether name is a valid C++ identifier without leading/trailing underscores."""
+    if not name:
+        return False
+    if name[0] == '_' or name[-1] == '_':
+        return False
+    if name[0].isdigit():
+        return False
+    return all(ch.isalnum() or ch == '_' for ch in name)
+
+
+def _parse_event_token(token: str) -> tuple[str, bool]:
+    """Parse an event token that may have a leading '&' prefix.
+    Returns (clean_name, is_mutable).
+    """
+    if token.startswith("&"):
+        return (token[1:], True)
+    return (token, False)
 
 
 def _validate_whitespace(raw_line: str, line_num: int, filepath: Path, is_state_line: bool) -> None:
@@ -192,6 +213,8 @@ def _parse_state_line(line: str) -> State:
 
     # State name is always first
     name = tokens[0]
+    if not _is_valid_cpp_name(name):
+        raise ValueError(f"Invalid state name '{name}'")
     tokens = tokens[1:]
 
     # Parse flags: consume tokens that are made of +, -, and digits only
@@ -222,22 +245,44 @@ def _parse_state_line(line: str) -> State:
             num_timeouts = int(ch)
 
     # Now tokens contain: events... ( referenced... ) published...
-    events: list[str] = []
-    referenced: list[str] = []
-    published: list[str] = []
+    raw_event_tokens: list[str] = []
+    raw_referenced: list[str] = []
+    raw_published: list[str] = []
 
     if "(" in tokens:
         paren_open = tokens.index("(")
-        events = tokens[:paren_open]
+        raw_event_tokens = tokens[:paren_open]
         rest_tokens = tokens[paren_open + 1:]
         if ")" in rest_tokens:
             paren_close = rest_tokens.index(")")
-            referenced = rest_tokens[:paren_close]
-            published = rest_tokens[paren_close + 1:]
+            raw_referenced = rest_tokens[:paren_close]
+            raw_published = rest_tokens[paren_close + 1:]
         else:
-            referenced = rest_tokens
+            raw_referenced = rest_tokens
     else:
-        events = tokens
+        raw_event_tokens = tokens
+
+    events: list[str] = []
+    mutable_events: set[str] = set()
+    for tok in raw_event_tokens:
+        ev_name, is_mutable = _parse_event_token(tok)
+        if not _is_valid_cpp_name(ev_name):
+            raise ValueError(f"Invalid event name '{ev_name}' in state '{name}'")
+        events.append(ev_name)
+        if is_mutable:
+            mutable_events.add(ev_name)
+
+    referenced: list[str] = []
+    for tok in raw_referenced:
+        if not _is_valid_cpp_name(tok):
+            raise ValueError(f"Invalid referenced terminal name '{tok}' in state '{name}'")
+        referenced.append(tok)
+
+    published: list[str] = []
+    for tok in raw_published:
+        if not _is_valid_cpp_name(tok):
+            raise ValueError(f"Invalid published terminal name '{tok}' in state '{name}'")
+        published.append(tok)
 
     return State(
         name=name,
@@ -246,6 +291,7 @@ def _parse_state_line(line: str) -> State:
         has_exit=has_exit,
         num_timeouts=num_timeouts,
         events=events,
+        mutable_events=mutable_events,
         referenced=referenced,
         published=published,
     )
@@ -276,6 +322,16 @@ def parse_definition(filepath: Path) -> FsmDefinition:
             kind = parts[0]
             namespace_path = parts[1]
             element_name = parts[2]
+            for segment in namespace_path.split("."):
+                if not _is_valid_cpp_name(segment):
+                    raise ValueError(
+                        f"{filepath.name}:{line_num}: invalid name '{segment}' "
+                        f"in namespace path '{namespace_path}'"
+                    )
+            if not _is_valid_cpp_name(element_name):
+                raise ValueError(
+                    f"{filepath.name}:{line_num}: invalid element name '{element_name}'"
+                )
             declarations.append(Declaration(kind, namespace_path, element_name))
         else:
             _validate_whitespace(raw_line, line_num, filepath, is_state_line=True)

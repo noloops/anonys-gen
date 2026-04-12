@@ -568,15 +568,16 @@ def _create_state_cpp(path: Path, fsm_idx: int, state_id: int, fsm_def: FsmDefin
 
     for ev_name in state.events:
         decl = fsm_def.get_declaration(ev_name)
+        const_qual = "" if ev_name in state.mutable_events else "const "
         lines.append("")
-        lines.append(f"{_I1}anonys::State* handle(Me& me, {decl.cpp_qualified}& event) {{")
+        lines.append(f"{_I1}anonys::State* handle(Me& me, {const_qual}{decl.cpp_qualified}& event) {{")
         lines.append(f"{_I2}return nullptr;")
         lines.append(f"{_I1}}}")
 
     for i in range(1, state.num_timeouts + 1):
         letter = chr(ord("A") + i - 1)
         lines.append("")
-        lines.append(f"{_I1}anonys::State* handle(Me& me, Timeout{letter}& event) {{")
+        lines.append(f"{_I1}anonys::State* handle(Me& me, const Timeout{letter}& event) {{")
         lines.append(f"{_I2}return nullptr;")
         lines.append(f"{_I1}}}")
 
