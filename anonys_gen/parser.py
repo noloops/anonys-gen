@@ -219,32 +219,32 @@ def _parse_state_line(line: str) -> State:
         raise ValueError(f"State name '{name}' must start with an upper case letter")
     tokens = tokens[1:]
 
-    # Parse flags: consume tokens that are made of +, -, and digits only
+    # Parse optional flags token: must be a single token matching [+][-][digit]
     has_enter = False
     has_exit = False
     num_timeouts = 0
-    flag_chars: list[str] = []
 
-    while tokens:
+    if tokens:
         t = tokens[0]
-        # A flag token is composed entirely of +, -, and digits and starts with + or -
-        if all(ch in "+-0123456789" for ch in t) and t[0] in "+-":
-            flag_chars.extend(t)
+        # Check if it looks like a flags token (only +, -, digits)
+        if t and all(ch in "+-0123456789" for ch in t):
+            # Validate strict order: optional + then optional - then optional digit
+            rest = t
+            if rest.startswith("+"):
+                has_enter = True
+                rest = rest[1:]
+            if rest.startswith("-"):
+                has_exit = True
+                rest = rest[1:]
+            if rest and rest.isdigit() and len(rest) == 1:
+                num_timeouts = int(rest)
+                rest = ""
+            if rest:
+                raise ValueError(
+                    f"Invalid flags '{t}' in state '{name}' "
+                    f"(expected format: [+][-][digit], e.g. +-1, +2, -)"
+                )
             tokens = tokens[1:]
-        # A standalone digit (timeout count) — either first or after +/- flags
-        elif t.isdigit() and not any(ch.isdigit() for ch in flag_chars):
-            flag_chars.extend(t)
-            tokens = tokens[1:]
-        else:
-            break
-
-    for ch in flag_chars:
-        if ch == "+":
-            has_enter = True
-        elif ch == "-":
-            has_exit = True
-        elif ch.isdigit():
-            num_timeouts = int(ch)
 
     # Now tokens contain: events... ( referenced... ) published...
     raw_event_tokens: list[str] = []
