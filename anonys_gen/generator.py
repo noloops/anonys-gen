@@ -20,6 +20,7 @@ from .parser import Declaration, FsmDefinition, State
 _I1 = "    "
 _I2 = _I1 * 2
 _I3 = _I1 * 3
+_I4 = _I1 * 4
 
 
 @dataclass
@@ -75,6 +76,8 @@ def generate(config: GeneratorConfig) -> None:
     _write_generated_config_h(anonys_dir / "GeneratedConfig.h", guard, len(fsm_defs), hdr)
     _write_fsm_pool_h(anonys_dir / "FsmPool.h", guard, fsm_defs, hdr)
     _write_fsm_pool_cpp(anonys_dir / "FsmPool.cpp", fsm_defs, hdr)
+    _write_buffer_calc_h(anonys_dir / "BufferCalc.h", guard, fsm_defs, hdr)
+    _write_buffer_calc_cpp(anonys_dir / "BufferCalc.cpp", fsm_defs, hdr)
 
     for fsm_idx, fsm_def in enumerate(fsm_defs):
         _write_terminals_h(impl_dir / f"terminals{fsm_def.name}.h", guard, fsm_idx, fsm_def, hdr)
@@ -535,6 +538,66 @@ def _write_fsm_pool_cpp(path: Path, fsm_defs: list[FsmDefinition], hdr: list[str
     lines.append("}")
     lines.append("")
 
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# BufferCalc.h / BufferCalc.cpp
+# ---------------------------------------------------------------------------
+
+def _write_buffer_calc_h(path: Path, guard_prefix: str, fsm_defs: list[FsmDefinition], hdr: list[str]) -> None:
+    guard = f"{guard_prefix}_ANONYS_BUFFERCALC_H"
+    lines: list[str] = []
+    lines.extend(hdr)
+    lines.append(f"#ifndef {guard}")
+    lines.append(f"#define {guard}")
+    lines.append("")
+    lines.append("#include <cstdint>")
+    lines.append("")
+    lines.append("namespace anonys")
+    lines.append("{")
+    lines.append(f"{_I1}struct BufferCalc {{")
+    lines.append(f"{_I2}bool ok;")
+    for fsm_def in fsm_defs:
+        lines.append(f"{_I2}uint16_t size{fsm_def.name};")
+    lines.append(f"{_I1}}};")
+    lines.append("")
+    lines.append(f"{_I1}BufferCalc calcBuffer();")
+    lines.append("}")
+    lines.append("")
+    lines.append(f"#endif // {guard}")
+    lines.append("")
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _write_buffer_calc_cpp(path: Path, fsm_defs: list[FsmDefinition], hdr: list[str]) -> None:
+    lines: list[str] = []
+    lines.extend(hdr)
+    lines.append('#include "BufferCalc.h"')
+    lines.append('#include "anonys/calcMaxBuffer.h"')
+    for fsm_def in fsm_defs:
+        lines.append(f'#include "fsm/{fsm_def.name}.h"')
+    lines.append('#include "AnonysManualConfig.h"')
+    lines.append("")
+    lines.append("namespace anonys")
+    lines.append("{")
+    lines.append(f"{_I1}BufferCalc calcBuffer() {{")
+    lines.append(f"{_I2}BufferCalc result{{true}};")
+    for fsm_def in fsm_defs:
+        lines.append(f"{_I2}{{")
+        lines.append(f"{_I3}uint16_t maxBufferSize{{0}};")
+        for state in fsm_def.all_states_flat():
+            if not state.children:
+                lines.append(f"{_I3}calcMaxBuffer(fsm::{fsm_def.name}::{state.name}, maxBufferSize);")
+        lines.append(f"{_I3}result.size{fsm_def.name} = maxBufferSize;")
+        lines.append(f"{_I3}if (maxBufferSize > BufferSize::{fsm_def.name}) {{")
+        lines.append(f"{_I4}result.ok = false;")
+        lines.append(f"{_I3}}}")
+        lines.append(f"{_I2}}}")
+    lines.append(f"{_I2}return result;")
+    lines.append(f"{_I1}}}")
+    lines.append("}")
+    lines.append("")
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
